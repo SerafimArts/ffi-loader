@@ -99,6 +99,8 @@ class Loader
 
             return new LibraryInformation($binary, $version, $library->getName(), $ffi);
         } catch (\Throwable $e) {
+            @\unlink($file);
+
             throw new LibraryException($e->getMessage());
         }
     }
@@ -140,7 +142,7 @@ class Loader
         $filename = \vsprintf('%s-%s-%s-%s.h', [
             $this->lowerCase($lib, '-'),
             $version,
-            (string)$this->os,
+            strtolower((string)$this->os),
             (string)$this->bits,
         ]);
 

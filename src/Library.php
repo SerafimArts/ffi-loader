@@ -17,10 +17,26 @@ namespace Serafim\FFILoader;
 abstract class Library implements LibraryInterface
 {
     /**
-     * @return string
+     * {@inheritDoc}
      */
     public function getOutputDirectory(): string
     {
         return __DIR__ . '/../out';
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getVersion(string $library): string
+    {
+        return '1.0.0';
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function suggest(OperatingSystem $os, BitDepth $bits): ?string
+    {
+        return null;
     }
 }

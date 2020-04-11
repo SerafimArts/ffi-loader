@@ -13,6 +13,7 @@ namespace Serafim\FFILoader;
 
 use Serafim\FFILoader\Exception\LibraryException;
 use Serafim\FFILoader\Support\LibraryNameTrait;
+use Serafim\FFILoader\Support\LoadLibrary;
 
 /**
  * Class Loader
@@ -77,7 +78,10 @@ class Loader
     public function load(LibraryInterface $library): LibraryInformation
     {
         $binary = $this->getBinaries($library);
-        $version = $library->getVersion($binary);
+
+        $version = LoadLibrary::chdir(\dirname($binary), static function () use ($library, $binary): string {
+            return $library->getVersion($binary);
+        });
 
         $file = $this->getOutputHeaderFile($library, $binary, $version);
 
@@ -95,7 +99,9 @@ class Loader
         }
 
         try {
-            $ffi = \FFI::cdef($headers, $binary);
+            $ffi = LoadLibrary::chdir(\dirname($binary), static function () use ($headers, $binary): \FFI {
+                return \FFI::cdef($headers, $binary);
+            });
 
             return new LibraryInformation($binary, $version, $library->getName(), $ffi);
         } catch (\Throwable $e) {

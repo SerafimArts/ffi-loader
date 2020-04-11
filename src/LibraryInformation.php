@@ -11,24 +11,13 @@ declare(strict_types=1);
 
 namespace Serafim\FFILoader;
 
+use Serafim\FFILoader\Support\LoadLibrary;
+
 /**
  * Class LibraryInformation
  */
 class LibraryInformation
 {
-    /**
-     * @var string
-     */
-    private const HEADERS_KERNEL32 = __DIR__ . '/../../resources/kernel32.h';
-
-    /**
-     * @var string
-     */
-    private const PHP_ZTS_WARNING =
-        'This functionality is not intended to work inside the PHP ZTS ' .
-        'version and may cause errors when calling over multiple threads. ' .
-        'Please use PHP NTS version instead';
-
     /**
      * @var string
      */
@@ -55,11 +44,6 @@ class LibraryInformation
     public \FFI $ffi;
 
     /**
-     * @var mixed|\FFI|null
-     */
-    private static ?\FFI $kernel32 = null;
-
-    /**
      * LibraryInformation constructor.
      *
      * @param string $bin
@@ -82,37 +66,6 @@ class LibraryInformation
      */
     public function chdir(callable $expr)
     {
-        if (\PHP_OS_FAMILY !== 'Windows') {
-            return $expr();
-        }
-
-        /** @var string $before */
-        $before = \getcwd();
-
-        try {
-            self::from($this->directory);
-
-            return $expr();
-        } finally {
-            self::from($before);
-        }
-    }
-
-    /**
-     * @param string $directory
-     * @return void
-     */
-    private static function from(string $directory): void
-    {
-        if (\ZEND_THREAD_SAFE) {
-            @\trigger_error(self::PHP_ZTS_WARNING);
-
-            (self::$kernel32 ?? \FFI::load(self::HEADERS_KERNEL32))
-                ->SetDllDirectoryA($directory);
-
-            return;
-        }
-
-        \chdir($directory);
+        return LoadLibrary::chdir($this->directory, $expr);
     }
 }

@@ -81,12 +81,12 @@ class Loader
 
         $file = $this->getOutputHeaderFile($library, $binary, $version);
 
+        $this->pre->define($this->defineName($library, 'bin'), $binary);
+        $this->pre->define($this->defineName($library, 'version'), $version);
+        $this->pre->define($this->defineName($library, 'name'), $library->getName());
+
         // Compile
         if (! \is_file($file)) {
-            $this->pre->define($this->defineName($library, 'bin'), $binary);
-            $this->pre->define($this->defineName($library, 'version'), $version);
-            $this->pre->define($this->defineName($library, 'name'), $library->getName());
-
             $headers = $this->pre->file($library->getHeaders());
 
             \file_put_contents($file, $headers, \LOCK_EX);

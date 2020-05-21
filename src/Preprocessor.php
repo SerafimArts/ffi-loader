@@ -161,13 +161,17 @@ class Preprocessor implements PreprocessorInterface
         switch ($token->getName()) {
             case 'T_LOCAL_INCLUDE':
             case 'T_GLOBAL_INCLUDE':
-                $pathname = $this->lookup($token->getValue(), $dir);
+                if ($this->matchAllAssertions($assertions)) {
+                    $pathname = $this->lookup($token->getValue(), $dir);
 
-                if (! \is_file($pathname) || ! \is_readable($pathname)) {
-                    throw new \LogicException(\sprintf('Can not include "%s"', $token->getValue()));
+                    if (! \is_file($pathname) || ! \is_readable($pathname)) {
+                        throw new \LogicException(\sprintf('Can not include "%s"', $token->getValue()));
+                    }
+
+                    return $this->file($pathname);
                 }
 
-                return $this->file($pathname);
+                return '';
 
             case 'T_IFNDEF':
                 return ! $this->defined($token->getValue());
@@ -182,14 +186,22 @@ class Preprocessor implements PreprocessorInterface
                 return null;
 
             case 'T_DEFINE':
-                $this->doDefine($token);
+                if ($this->matchAllAssertions($assertions)) {
+                    $this->doDefine($token);
 
-                return '#define ' . $token->getValue();
+                    return '#define ' . $token->getValue();
+                }
+
+                return '';
 
             case 'T_UNDEF':
-                $this->doUndef($token);
+                if ($this->matchAllAssertions($assertions)) {
+                    $this->doUndef($token);
 
-                return '#undef ' . $token->getValue();
+                    return '#undef ' . $token->getValue();
+                }
+
+                return '';
 
             case 'T_COMMENT':
             case 'T_GROUP_COMMENT':

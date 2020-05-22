@@ -38,7 +38,7 @@ abstract class AbstractLexer implements LexerInterface
     {
         \assert(\is_string($source), 'Source argument MUST be a string');
 
-        \preg_match_all($this->pcre, $source, $matches, static::PCRE_FLAGS, $offset);
+        \preg_match_all($this->pcre, \str_replace("\r", '', $source), $matches, static::PCRE_FLAGS, $offset);
 
         foreach ($matches as $match) {
             $name = \array_pop($match);

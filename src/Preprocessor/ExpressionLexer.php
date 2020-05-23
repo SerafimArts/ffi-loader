@@ -23,7 +23,7 @@ class ExpressionLexer extends AbstractLexer
      */
     private const LEXEMES = [
         // Operands
-        'T_VERSION'    => '\d+(?:\.\d+)+',
+        'T_VERSION'    => '\d+(?:\.\d+)+(?:[^\s]*)',
         'T_DIGIT'      => '\d+',
         'T_BOOL'       => 'true|false',
         'T_STRING'       => 'true|false',

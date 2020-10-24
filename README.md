@@ -13,147 +13,160 @@ Library is available as composer repository and can be installed using the follo
 $ composer require serafim/ffi-loader
 ```
 
-## Simple Example
+## Usage
 
-### Define Your Library
+First, let's define your library. Some environment parameters are already determined automatically, 
+so the minimal declaration will look like this.
 
 ```php
 use Serafim\FFILoader\Library;
-use Serafim\FFILoader\OperatingSystem;
-use Serafim\FFILoader\BitDepth;
 
-class Kernel32 extends Library
+class ExampleLibrary extends Library
 {
-    public function getName() : string
+    public function getBinary(): ?string
     {
-        return 'Example Library';
+        return 'kernel32.dll';
     }
 
     public function getHeaders(): string
     {
-        return '/path/to/headers.h';
-    }
-
-    public function getVersion(string $library): string
-    {
-        /** @see https://docs.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getversion */
-        $version = \FFI::cdef('extern unsigned long GetVersion();', $library)->GetVersion();
-        
-        return \vsprintf('%d.%d.%d', [
-            $version & 0xff,
-            $version >> 8,
-            $version < 0x80000000 ? ($version >> 8 & 0xff) : 0,
-        ]);
-    }
-
-    public function getLibrary(OperatingSystem $os, BitDepth $bits): ?string
-    {
-        return $os->isWindows() ? 'kernel32.dll' : null;
-    }
-
-    public function suggest(OperatingSystem $os, BitDepth $bits): ?string
-    {
-        return 'Your OS (' . $os . ') does not support this library';
+         return <<<'clang'
+            extern unsigned long GetVersion();
+        clang;
     }
 }
 ```
 
-### Library Loading
+After defining the library, just load it.
 
 ```php
 use Serafim\FFILoader\Loader;
 
-$loader = new Loader();
-$info = $loader->load(new Kernel32());
-
-var_dump(
-    $info->bin,         // "kernel32.dll"
-    $info->version,     // "10.4700672.0"
-    $info->name,        // "kernel32"
-    $info->directory,   // "."
-);
-
-$ffi = $info->ffi;      // An instance of FFI
+$ffi = Loader::load(ExampleLibrary::class);
 ```
 
-## Preprocessor
+### Preloading
 
-The implementation of the preprocessor is **not completely** equivalent to the 
-preprocessor C and only supports a simple set of instructions to speed up parsing.
+Define the following code in your preload file.
 
 ```php
-$pre = new \Serafim\FFILoader\Preprocessor();
+<?php
+require __DIR__ . '/vendor/autoload.php';
 
-$pre->includeFrom('/path/to/includes'); // Add include directory (for `#include` directive)
-$pre->define('A');                      // Define "A" as empty string
-$pre->define('A', '42');                // Define "A" as "42"
-$pre->undef('A');                       // Remove "A" definition
+use Serafim\FFILoader\Loader;
 
-$pre->keepComments = true;              // Save comments in output code (or remove if "false")
-$pre->minify = false;                   // Keep extra empty lines (or remove if "true")
-$pre->tolerant = true;                  // Ignore unrecognized or bad expressions (throws an errors if "false")
+Loader::load(ExampleLibrary::class);
 ```
 
-### Expressions
+Then you can use it:
 
-- `#if a > b` - greater than
-- `#if a < b` - less than expr
-- `#if a >= b` - greater or equal expr
-- `#if a <= b` - less or equal expr
-- `#if a == b` - equal expr
-- `#if a != b` - not equal expr
+```php
+$ffi = \FFI::scope(ExampleLibrary::class);
+```
 
-**Types**
-- Integer (like `42`)
-- Float (like `0.23`)
-- Version (special type like `1.0.0`)
-- Boolean (`true` or `false`)
+### Custom Scope Name
 
-```c
-#if 0 > 1
-    #if true
-        // Example
-    #endif
+To determine custom FFI scope name, you need to add the `getName(): string`
+method to your library.
+
+```php
+use Serafim\FFILoader\Library;class ExampleLibrary extends Library
+{
+    public function getName(): string
+    {
+       return 'kernel32-version';
+    }
+
+    // ... other methods ...
+
+}
+
+// Scope Usage
+
+$ffi = \FFI::scope('kernel32-version');
+```
+
+### Custom Library Directory
+
+Some libraries may load other dependencies during initialization. You can manually change this directory using
+the `chdir()` function or with
+[this code](https://www.php.net/manual/en/function.chdir.php#125457) in the case of working in a PHP ZTS environment.
+
+However, the `Loader` is already performing these operations, you just need to define the desired working directory.
+
+```php
+use Serafim\FFILoader\Library;class ExampleLibrary extends Library
+{
+    public function getDirectory(): string
+    {
+       return __DIR__ . '/bin';
+    }
+
+    // ... other methods ...
+
+}
+```
+
+### Error Handling
+
+In some cases, it may be necessary to inform the user about the solution of the error during the incorrect loading of
+the library. In this case, add a method that describes how to solve the problem.
+
+```php
+use Serafim\FFILoader\Library;class ExampleLibrary extends Library
+{
+    public function getSuggestion(): string
+    {
+        return \PHP_OS_FAMILY === 'Windows'
+            ? 'Something went wrong'
+            : 'Your OS does not support this library'
+        ;
+    }
+
+    // ... other methods ...
+
+}
+```
+
+### Preprocessing
+
+The C language contains preprocessing of the source code before it goes directly to the compiler. The library
+already [contains a subset](https://github.com/SerafimArts/FFI-Preprocessor) of the
+standard ([ISO/IEC 9899:TC2](http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1124.pdf)) preprocessor.
+
+You can add your own directives that are required to build your headers.
+
+```php
+use Serafim\FFILoader\Library;class ExampleLibrary extends Library
+{
+    public function getDirectives(): iterable
+    {
+        yield 'SOME' => 42;
+    }
+
+    // ... other methods ...
+
+}
+```
+
+In this case, the source code of headers can use this directive.
+
+```cpp
+#if SOME == 42
+    #warning directive contains value 42
+#else
+    #warning directive DOES NOT contain value 42
 #endif
 ```
 
-### Other Directives
+In addition, you can override the values of directives directly during the loading of the library.
 
-- `#ifdef a` - if defined
-- `#ifndef a` - if not defined
-- `#define A B` - define "A" as "B"
-- `#define A` - define "A" as empty string
-- `#undef A` - remove define "A"
-- `#include "xxxx"` or `#include <xxxx>` - include other header file
+```php
+<?php
 
-**Library Defines**
+use Serafim\FFILoader\Loader;
 
-- `__[library_name]_version__` - version of loaded library
-- `__[library_name]_bin__` - path to binaries (.dll or .so) of loaded library
-- `__[library_name]_name__` - name of loaded library
-
-**Environment Defines**
-- `__i386__` - x86 OS architecture
-- `__amd64__` - x64 OS architecture
-- `__windows__`, `__win__`, `__cygwin__`, `__mingw32__` - Windows
-- `__win32__` - Windows x86
-- `__win64__` - Windows x64
-- `__linux__` - Linux
-- `__osx__`, `__apple__` or `__macosx__` - Darwin (MacOS)
-- `__freebsd__`, `__freebsd_kernel__`, `__dragonfly__`, `__bsdi__` or `__openbsd__` - BSD
-- `__sun__`, `__svr4__` or `__solaris__` - Solaris
-
-> Note: All env defines are allowed in `__xxx__`, `__xxx` and `_xxx` format.
-
-```c
-#define A 42
-
-#ifdef A
-    #ifdef __windows__
-        #if __kernel32_version__ > 10.0
-            // OK
-        #endif
-    #endif
-#endif
+$ffi = Loader::load(ExampleLibrary::class, [
+    'SOME' => 23,
+]);
 ```
-

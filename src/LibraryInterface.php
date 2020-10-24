@@ -1,7 +1,7 @@
 <?php
 
 /**
- * This file is part of SDL package.
+ * This file is part of ffi-loader package.
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -11,8 +11,13 @@ declare(strict_types=1);
 
 namespace Serafim\FFILoader;
 
+use Phplrt\Contracts\Source\ReadableInterface;
+
+use Serafim\Preprocessor\PreprocessorInterface;
+
 /**
- * Interface LibraryInterface
+ * @psalm-import-type SourceEntry from PreprocessorInterface
+ * @see PreprocessorInterface
  */
 interface LibraryInterface
 {
@@ -24,30 +29,27 @@ interface LibraryInterface
     /**
      * @return string
      */
-    public function getHeaders(): string;
-
-    /**
-     * @param string $library
-     * @return string
-     */
-    public function getVersion(string $library): string;
-
-    /**
-     * @param OperatingSystem $os
-     * @param BitDepth $bits
-     * @return string|null
-     */
-    public function getLibrary(OperatingSystem $os, BitDepth $bits): ?string;
+    public function getBinary(): ?string;
 
     /**
      * @return string
      */
-    public function getOutputDirectory(): string;
+    public function getDirectory(): string;
 
     /**
-     * @param OperatingSystem $os
-     * @param BitDepth $bits
-     * @return string|null
+     * @return string
      */
-    public function suggest(OperatingSystem $os, BitDepth $bits): ?string;
+    public function getSuggestion(): string;
+
+    /**
+     * @psalm-return SourceEntry
+     * @return string|resource|ReadableInterface|\SplFileInfo
+     */
+    public function getHeaders();
+
+    /**
+     * @psalm-return iterable<string, mixed>
+     * @return iterable
+     */
+    public function getDirectives(): iterable;
 }

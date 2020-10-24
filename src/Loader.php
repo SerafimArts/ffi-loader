@@ -1,7 +1,7 @@
 <?php
 
 /**
- * This file is part of FFI Loader package.
+ * This file is part of ffi-loader package.
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -11,37 +11,31 @@ declare(strict_types=1);
 
 namespace Serafim\FFILoader;
 
-use Serafim\FFILoader\Exception\LibraryException;
-use Serafim\FFILoader\Support\LibraryNameTrait;
-use Serafim\FFILoader\Support\LoadLibrary;
+use FFI\Exception;
+use FFI\ParserException;
+use Serafim\FFILoader\Exception\BinaryException;
+use Serafim\FFILoader\Exception\EnvironmentException;
+use Serafim\FFILoader\Exception\HeadersException;
+use Serafim\FFILoader\Exception\LoaderException;
+use Serafim\Flux\Library as FFILibrary;
+use Serafim\Preprocessor\Exception\PreprocessorException;
+use Serafim\Preprocessor\Preprocessor;
+use Serafim\Preprocessor\PreprocessorInterface;
 
 /**
- * Class Loader
+ * @psalm-type LibraryRelation = LibraryInterface|class-string<LibraryInterface>
  */
-class Loader
+final class Loader
 {
-    use LibraryNameTrait;
+    /**
+     * @var string
+     */
+    private const ERROR_LIB_ARGUMENT = 'Library argument must be a class that implements %s or an instance of %$1s';
 
     /**
      * @var string
      */
-    private const ERROR_LOCAL_LIBRARY =
-        'Unable to retrieve library information. %s';
-
-    /**
-     * @var string
-     */
-    private const ERROR_SUGGEST = 'Your operating system (%s %s) may not be supported.';
-
-    /**
-     * @var OperatingSystem
-     */
-    private OperatingSystem $os;
-
-    /**
-     * @var BitDepth
-     */
-    private BitDepth $bits;
+    private const ERROR_ENVIRONMENT = 'FFI is not available in this PHP environment';
 
     /**
      * @var PreprocessorInterface
@@ -49,109 +43,112 @@ class Loader
     private PreprocessorInterface $pre;
 
     /**
-     * Loader constructor.
-     *
-     * @param OperatingSystem|null $os
-     * @param BitDepth|null $bits
+     * @param PreprocessorInterface|null $pre
      */
-    public function __construct(OperatingSystem $os = null, BitDepth $bits = null)
+    public function __construct(PreprocessorInterface $pre = null)
     {
-        $this->os = $os ?? OperatingSystem::current();
-        $this->bits = $bits ?? BitDepth::current();
-
-        $this->pre = new Preprocessor();
-        $this->pre->keepComments = false;
+        $this->pre = $pre ?? new Preprocessor();
     }
 
     /**
-     * @return PreprocessorInterface
+     * @psalm-param LibraryRelation $library
+     * @param string|LibraryInterface $library
+     * @return LibraryInterface
      */
-    public function preprocessor(): PreprocessorInterface
+    private function instance($library): LibraryInterface
     {
-        return $this->pre;
-    }
-
-    /**
-     * @param LibraryInterface $library
-     * @return LibraryInformation
-     */
-    public function load(LibraryInterface $library): LibraryInformation
-    {
-        $binary = $this->getBinaries($library);
-
-        $version = LoadLibrary::chdir(\dirname($binary), static function () use ($library, $binary): string {
-            return $library->getVersion($binary);
-        });
-
-        $file = $this->getOutputHeaderFile($library, $binary, $version);
-
-        $this->pre->define($this->defineName($library, 'bin'), $binary);
-        $this->pre->define($this->defineName($library, 'version'), $version);
-        $this->pre->define($this->defineName($library, 'name'), $library->getName());
-
-        // Compile
-        if (! \is_file($file)) {
-            $headers = $this->pre->file($library->getHeaders());
-
-            \file_put_contents($file, $headers, \LOCK_EX);
-        } else {
-            $headers = \file_get_contents($file);
+        if ($library instanceof LibraryInterface) {
+            return $library;
         }
+
+        if (\is_subclass_of($library, LibraryInterface::class)) {
+            return new $library();
+        }
+
+        throw new \InvalidArgumentException(\sprintf(self::ERROR_LIB_ARGUMENT, LibraryInterface::class));
+    }
+
+    /**
+     * @psalm-param LibraryRelation $library
+     * @param string|LibraryInterface $library
+     * @param iterable|array $directives
+     * @return \FFI
+     */
+    public function cdef($library, iterable $directives = []): \FFI
+    {
+        if (! FFILibrary::isAvailable()) {
+            throw new EnvironmentException(self::ERROR_ENVIRONMENT);
+        }
+
+        $library = $this->instance($library);
 
         try {
-            $ffi = LoadLibrary::chdir(\dirname($binary), static function () use ($headers, $binary): \FFI {
-                return \FFI::cdef($headers, $binary);
-            });
-
-            return new LibraryInformation($binary, $version, $library->getName(), $ffi);
+            return $this->new($library, $directives);
+        } catch (ParserException | PreprocessorException $e) {
+            throw new HeadersException($e->getMessage(), $e->getCode(), $e);
+        } catch (Exception $e) {
+            $message = \vsprintf('%s: %s', [$e->getMessage(), $library->getSuggestion()]);
+            throw new BinaryException($message, $e->getCode(), $e);
         } catch (\Throwable $e) {
-            @\unlink($file);
+            throw new LoaderException($e->getMessage(), $e->getCode(), $e);
+        }
+    }
 
-            throw new LibraryException($e->getMessage());
+    /**
+     * @psalm-param LibraryRelation $library
+     * @param LibraryInterface|string $library
+     * @param iterable|array $directives
+     * @return \FFI
+     */
+    public static function load($library, iterable $directives = []): \FFI
+    {
+        return (new self())->cdef($library, $directives);
+    }
+
+    /**
+     * @param LibraryInterface $library
+     * @param iterable|array $directives
+     * @return \FFI
+     */
+    private function new(LibraryInterface $library, iterable $directives = []): \FFI
+    {
+        $current = \getcwd();
+
+        try {
+            FFILibrary::setDirectory($library->getDirectory());
+
+            return \FFI::cdef(
+                $this->compile($library, $directives),
+                $library->getBinary()
+            );
+        } finally {
+            FFILibrary::setDirectory($current);
         }
     }
 
     /**
      * @param LibraryInterface $library
+     * @param iterable|array $directives
      * @return string
      */
-    private function getBinaries(LibraryInterface $library): string
+    private function compile(LibraryInterface $library, iterable $directives = []): string
     {
-        $from = $library->getLibrary($this->os, $this->bits);
+        $preprocessor = clone $this->pre;
 
-        if ($from === null) {
-            throw new LibraryException(\sprintf(self::ERROR_LOCAL_LIBRARY, $this->suggest($library)));
+        $preprocessor->define('FFI_SCOPE', $library->getName());
+
+        if ($binary = $library->getBinary()) {
+            $preprocessor->define('FFI_LIB', $binary);
         }
 
-        return \realpath($from) ?: $from;
-    }
+        foreach ($library->getDirectives() as $name => $value) {
+            $preprocessor->define($name, $value);
+        }
 
-    /**
-     * @param LibraryInterface $library
-     * @return string
-     */
-    private function suggest(LibraryInterface $library): string
-    {
-        $suggest = $library->suggest($this->os, $this->bits);
+        foreach ($directives as $name => $value) {
+            $preprocessor->define($name, $value);
+        }
 
-        return $suggest ?? \sprintf(self::ERROR_SUGGEST, (string)$this->os, (string)$this->bits);
-    }
-
-    /**
-     * @param LibraryInterface $lib
-     * @param string $bin
-     * @param string $version
-     * @return string
-     */
-    protected function getOutputHeaderFile(LibraryInterface $lib, string $bin, string $version): string
-    {
-        $filename = \vsprintf('%s-%s-%s-%s.h', [
-            $this->lowerCase($lib, '-'),
-            $version,
-            strtolower((string)$this->os),
-            (string)$this->bits,
-        ]);
-
-        return $lib->getOutputDirectory() . '/' . $filename;
+        return (string)$preprocessor->process($library->getHeaders());
     }
 }

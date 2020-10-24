@@ -70,7 +70,9 @@ To determine custom FFI scope name, you need to add the `getName(): string`
 method to your library.
 
 ```php
-use Serafim\FFILoader\Library;class ExampleLibrary extends Library
+use Serafim\FFILoader\Library;
+
+class ExampleLibrary extends Library
 {
     public function getName(): string
     {
@@ -95,7 +97,9 @@ the `chdir()` function or with
 However, the `Loader` is already performing these operations, you just need to define the desired working directory.
 
 ```php
-use Serafim\FFILoader\Library;class ExampleLibrary extends Library
+use Serafim\FFILoader\Library;
+
+class ExampleLibrary extends Library
 {
     public function getDirectory(): string
     {
@@ -113,7 +117,9 @@ In some cases, it may be necessary to inform the user about the solution of the 
 the library. In this case, add a method that describes how to solve the problem.
 
 ```php
-use Serafim\FFILoader\Library;class ExampleLibrary extends Library
+use Serafim\FFILoader\Library;
+
+class ExampleLibrary extends Library
 {
     public function getSuggestion(): string
     {
@@ -137,7 +143,9 @@ standard ([ISO/IEC 9899:TC2](http://www.open-std.org/jtc1/sc22/wg14/www/docs/n11
 You can add your own directives that are required to build your headers.
 
 ```php
-use Serafim\FFILoader\Library;class ExampleLibrary extends Library
+use Serafim\FFILoader\Library;
+
+class ExampleLibrary extends Library
 {
     public function getDirectives(): iterable
     {
@@ -162,8 +170,6 @@ In this case, the source code of headers can use this directive.
 In addition, you can override the values of directives directly during the loading of the library.
 
 ```php
-<?php
-
 use Serafim\FFILoader\Loader;
 
 $ffi = Loader::load(ExampleLibrary::class, [

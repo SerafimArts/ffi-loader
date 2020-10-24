@@ -13,6 +13,8 @@ namespace Serafim\FFILoader;
 
 use FFI\Exception;
 use FFI\ParserException;
+use Phplrt\Exception\LineReader;
+use Phplrt\Source\File;
 use Serafim\FFILoader\Exception\BinaryException;
 use Serafim\FFILoader\Exception\EnvironmentException;
 use Serafim\FFILoader\Exception\HeadersException;
@@ -52,20 +54,13 @@ final class Loader
 
     /**
      * @psalm-param LibraryRelation $library
-     * @param string|LibraryInterface $library
-     * @return LibraryInterface
+     * @param LibraryInterface|string $library
+     * @param iterable|array $directives
+     * @return \FFI
      */
-    private function instance($library): LibraryInterface
+    public static function load($library, iterable $directives = []): \FFI
     {
-        if ($library instanceof LibraryInterface) {
-            return $library;
-        }
-
-        if (\is_subclass_of($library, LibraryInterface::class)) {
-            return new $library();
-        }
-
-        throw new \InvalidArgumentException(\sprintf(self::ERROR_LIB_ARGUMENT, LibraryInterface::class));
+        return (new self())->cdef($library, $directives);
     }
 
     /**
@@ -85,24 +80,31 @@ final class Loader
         try {
             return $this->new($library, $directives);
         } catch (ParserException | PreprocessorException $e) {
-            throw new HeadersException($e->getMessage(), $e->getCode(), $e);
+            throw new HeadersException($e->getMessage(), $e->getCode());
         } catch (Exception $e) {
             $message = \vsprintf('%s: %s', [$e->getMessage(), $library->getSuggestion()]);
-            throw new BinaryException($message, $e->getCode(), $e);
+            throw new BinaryException($message, $e->getCode());
         } catch (\Throwable $e) {
-            throw new LoaderException($e->getMessage(), $e->getCode(), $e);
+            throw new LoaderException($e->getMessage(), $e->getCode());
         }
     }
 
     /**
      * @psalm-param LibraryRelation $library
-     * @param LibraryInterface|string $library
-     * @param iterable|array $directives
-     * @return \FFI
+     * @param string|LibraryInterface $library
+     * @return LibraryInterface
      */
-    public static function load($library, iterable $directives = []): \FFI
+    private function instance($library): LibraryInterface
     {
-        return (new self())->cdef($library, $directives);
+        if ($library instanceof LibraryInterface) {
+            return $library;
+        }
+
+        if (\is_subclass_of($library, LibraryInterface::class)) {
+            return new $library();
+        }
+
+        throw new \InvalidArgumentException(\sprintf(self::ERROR_LIB_ARGUMENT, LibraryInterface::class));
     }
 
     /**
@@ -112,15 +114,19 @@ final class Loader
      */
     private function new(LibraryInterface $library, iterable $directives = []): \FFI
     {
+        $headers = $this->compile($library, $directives);
         $current = \getcwd();
 
         try {
             FFILibrary::setDirectory($library->getDirectory());
 
-            return \FFI::cdef(
-                $this->compile($library, $directives),
-                $library->getBinary()
-            );
+            try {
+                return \FFI::cdef($headers, $library->getBinary());
+            } catch (ParserException $e) {
+                $message = $this->parseHeadersError($headers, $e->getMessage());
+
+                throw new ParserException($message, $e->getCode(), $e);
+            }
         } finally {
             FFILibrary::setDirectory($current);
         }
@@ -135,11 +141,8 @@ final class Loader
     {
         $preprocessor = clone $this->pre;
 
-        $preprocessor->define('FFI_SCOPE', $library->getName());
-
-        if ($binary = $library->getBinary()) {
-            $preprocessor->define('FFI_LIB', $binary);
-        }
+        $preprocessor->undef('FFI_SCOPE');
+        $preprocessor->undef('FFI_LIB');
 
         foreach ($library->getDirectives() as $name => $value) {
             $preprocessor->define($name, $value);
@@ -149,6 +152,29 @@ final class Loader
             $preprocessor->define($name, $value);
         }
 
-        return (string)$preprocessor->process($library->getHeaders());
+        return \implode("\n", [
+            \sprintf('#define FFI_SCOPE "%s"', \addcslashes($library->getName(), '"')),
+            \sprintf('#define FFI_LIB "%s"', \addcslashes($library->getBinary() ?: '', '"')),
+            $preprocessor->process($library->getHeaders())
+        ]);
+    }
+
+    /**
+     * @param string $headers
+     * @param string $message
+     * @return string
+     */
+    private function parseHeadersError(string $headers, string $message): string
+    {
+        $replace = static function (array $matches) use ($headers): string {
+            $line = (int)($matches[1] ?? 0);
+            $reader = new LineReader(File::fromSources($headers));
+
+            return \sprintf('at line %d in%s > %s%2$s', $line, \PHP_EOL, $reader->readLine($line));
+        };
+
+        $result = \preg_replace_callback('/at\hline\h(\d+)/', $replace, $message);
+
+        return \ucfirst((string)($result ?: $message));
     }
 }

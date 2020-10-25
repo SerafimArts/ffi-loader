@@ -114,7 +114,7 @@ final class Loader
      */
     private function new(LibraryInterface $library, iterable $directives = []): \FFI
     {
-        $headers = $this->compile($library, $directives);
+        $headers = $this->headers($library, $directives);
         $current = \getcwd();
 
         try {
@@ -137,7 +137,7 @@ final class Loader
      * @param iterable|array $directives
      * @return string
      */
-    private function compile(LibraryInterface $library, iterable $directives = []): string
+    public function headers(LibraryInterface $library, iterable $directives = []): string
     {
         $preprocessor = clone $this->pre;
 

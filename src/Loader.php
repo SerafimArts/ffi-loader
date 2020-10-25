@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Serafim\FFILoader;
 
+use Composer\Autoload\ClassLoader;
 use FFI\Exception;
 use FFI\ParserException;
 use Phplrt\Exception\LineReader;
@@ -38,6 +39,11 @@ final class Loader
      * @var string
      */
     private const ERROR_ENVIRONMENT = 'FFI is not available in this PHP environment';
+
+    /**
+     * @var ClassLoader|null
+     */
+    private static ?ClassLoader $composer = null;
 
     /**
      * @var PreprocessorInterface
@@ -155,7 +161,7 @@ final class Loader
         return \implode("\n", [
             \sprintf('#define FFI_SCOPE "%s"', \addcslashes($library->getName(), '"')),
             \sprintf('#define FFI_LIB "%s"', \addcslashes($library->getBinary() ?: '', '"')),
-            $preprocessor->process($library->getHeaders())
+            $preprocessor->process($library->getHeaders()),
         ]);
     }
 
@@ -176,5 +182,46 @@ final class Loader
         $result = \preg_replace_callback('/at\hline\h(\d+)/', $replace, $message);
 
         return \ucfirst((string)($result ?: $message));
+    }
+
+    /**
+     * @return ClassLoader
+     */
+    private static function getClassLoader(): ClassLoader
+    {
+        $trace = \debug_backtrace(\DEBUG_BACKTRACE_IGNORE_ARGS) ?? [];
+
+        while ($trace) {
+            $current = \array_shift($trace);
+
+            if (\strpos($current['class'] ?? '', 'ComposerAutoloaderInit') === 0) {
+                return $current['class']::getLoader();
+            }
+        }
+
+        throw new \LogicException('File ' . __FILE__ . ' MUST be loaded though Composer');
+    }
+
+    /**
+     * @psalm-param non-empty-array<array-key, class-string> $classes
+     * @psalm-param callable(string): void $then
+     *
+     * @param string[] $classes
+     * @param callable $then
+     */
+    public static function onLoad(array $classes, callable $then): void
+    {
+        \assert(\count($classes));
+
+        self::$composer = self::getClassLoader();
+
+        $loader = static function (string $class) use ($classes, $then): void {
+            if (\in_array($class, $classes, true)) {
+                self::$composer->loadClass($class);
+                $then($class);
+            }
+        };
+
+        \spl_autoload_register($loader, true, true);
     }
 }

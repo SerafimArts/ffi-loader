@@ -9,21 +9,10 @@
 
 declare(strict_types=1);
 
-namespace Serafim\FFILoader\Renderer\Type;
+namespace Serafim\FFILoader\Type;
 
-final class IntTypeRenderer extends NamedTypeRenderer implements ArgumentRendererInterface, ReturnTypeRendererInterface
+final class StringTypeRenderer extends NamedTypeRenderer implements ArgumentRendererInterface, ReturnTypeRendererInterface
 {
-    /**
-     * @param string $suffix
-     * @return string
-     */
-    private function render(string $suffix): string
-    {
-        $result = \PHP_INT_SIZE === 8 ? 'int64_t' : 'int32_t';
-
-        return $result . $suffix;
-    }
-
     /**
      * @param \ReflectionType $type
      * @param \ReflectionParameter $param
@@ -31,9 +20,9 @@ final class IntTypeRenderer extends NamedTypeRenderer implements ArgumentRendere
      */
     public function renderArgument(\ReflectionType $type, \ReflectionParameter $param): string
     {
-        $suffix = $type->allowsNull() || $param->isPassedByReference() ? '*' : '';
+        $prefix = $param->isPassedByReference() ? '' : 'const ';
 
-        return $this->render($suffix);
+        return $prefix . 'char*';
     }
 
     /**
@@ -43,7 +32,7 @@ final class IntTypeRenderer extends NamedTypeRenderer implements ArgumentRendere
      */
     public function renderReturnType(\ReflectionType $type, \ReflectionFunctionAbstract $fn): string
     {
-        return $this->render($type->allowsNull() ? '*' : '');
+        return 'char*';
     }
 
     /**
@@ -52,6 +41,6 @@ final class IntTypeRenderer extends NamedTypeRenderer implements ArgumentRendere
      */
     protected function is(\ReflectionNamedType $type): bool
     {
-        return $type->getName() === 'int';
+        return $type->getName() === 'string';
     }
 }

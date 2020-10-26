@@ -15,13 +15,13 @@ use Serafim\FFILoader\Attribute\LibImport;
 use Serafim\FFILoader\Attribute\Reader;
 use Serafim\FFILoader\Attribute\Type;
 use Serafim\FFILoader\Context;
-use Serafim\FFILoader\Renderer\Type\ArgumentRendererInterface;
-use Serafim\FFILoader\Renderer\Type\FloatTypeRenderer;
-use Serafim\FFILoader\Renderer\Type\IntTypeRenderer;
-use Serafim\FFILoader\Renderer\Type\MixedTypeRenderer;
-use Serafim\FFILoader\Renderer\Type\ReturnTypeRendererInterface;
-use Serafim\FFILoader\Renderer\Type\StringTypeRenderer;
-use Serafim\FFILoader\Renderer\Type\TypeRendererInterface;
+use Serafim\FFILoader\Type\ArgumentRendererInterface;
+use Serafim\FFILoader\Type\FloatTypeRenderer;
+use Serafim\FFILoader\Type\IntTypeRenderer;
+use Serafim\FFILoader\Type\MixedTypeRenderer;
+use Serafim\FFILoader\Type\ReturnTypeRendererInterface;
+use Serafim\FFILoader\Type\StringTypeRenderer;
+use Serafim\FFILoader\Type\TypeRendererInterface;
 
 /**
  * @psalm-import-type ReflectionAttributeProvider from Context

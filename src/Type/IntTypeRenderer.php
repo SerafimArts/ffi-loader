@@ -9,10 +9,21 @@
 
 declare(strict_types=1);
 
-namespace Serafim\FFILoader\Renderer\Type;
+namespace Serafim\FFILoader\Type;
 
-final class MixedTypeRenderer extends NamedTypeRenderer implements ArgumentRendererInterface, ReturnTypeRendererInterface
+final class IntTypeRenderer extends NamedTypeRenderer implements ArgumentRendererInterface, ReturnTypeRendererInterface
 {
+    /**
+     * @param string $suffix
+     * @return string
+     */
+    private function render(string $suffix): string
+    {
+        $result = \PHP_INT_SIZE === 8 ? 'int64_t' : 'int32_t';
+
+        return $result . $suffix;
+    }
+
     /**
      * @param \ReflectionType $type
      * @param \ReflectionParameter $param
@@ -20,7 +31,9 @@ final class MixedTypeRenderer extends NamedTypeRenderer implements ArgumentRende
      */
     public function renderArgument(\ReflectionType $type, \ReflectionParameter $param): string
     {
-        return 'void*';
+        $suffix = $type->allowsNull() || $param->isPassedByReference() ? '*' : '';
+
+        return $this->render($suffix);
     }
 
     /**
@@ -30,7 +43,7 @@ final class MixedTypeRenderer extends NamedTypeRenderer implements ArgumentRende
      */
     public function renderReturnType(\ReflectionType $type, \ReflectionFunctionAbstract $fn): string
     {
-        return 'void*';
+        return $this->render($type->allowsNull() ? '*' : '');
     }
 
     /**
@@ -39,6 +52,6 @@ final class MixedTypeRenderer extends NamedTypeRenderer implements ArgumentRende
      */
     protected function is(\ReflectionNamedType $type): bool
     {
-        return $type->getName() === 'mixed';
+        return $type->getName() === 'int';
     }
 }

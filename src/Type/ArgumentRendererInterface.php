@@ -9,13 +9,14 @@
 
 declare(strict_types=1);
 
-namespace Serafim\FFILoader\Renderer\Type;
+namespace Serafim\FFILoader\Type;
 
-interface TypeRendererInterface
+interface ArgumentRendererInterface extends TypeRendererInterface
 {
     /**
      * @param \ReflectionType $type
-     * @return bool
+     * @param \ReflectionParameter $param
+     * @return string
      */
-    public function match(\ReflectionType $type): bool;
+    public function renderArgument(\ReflectionType $type, \ReflectionParameter $param): string;
 }

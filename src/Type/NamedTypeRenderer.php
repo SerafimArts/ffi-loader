@@ -9,7 +9,7 @@
 
 declare(strict_types=1);
 
-namespace Serafim\FFILoader\Renderer\Type;
+namespace Serafim\FFILoader\Type;
 
 abstract class NamedTypeRenderer implements TypeRendererInterface
 {

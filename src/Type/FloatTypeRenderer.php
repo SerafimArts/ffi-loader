@@ -9,10 +9,21 @@
 
 declare(strict_types=1);
 
-namespace Serafim\FFILoader\Renderer\Type;
+namespace Serafim\FFILoader\Type;
 
-final class StringTypeRenderer extends NamedTypeRenderer implements ArgumentRendererInterface, ReturnTypeRendererInterface
+final class FloatTypeRenderer extends NamedTypeRenderer implements ArgumentRendererInterface, ReturnTypeRendererInterface
 {
+    /**
+     * @param string $suffix
+     * @return string
+     */
+    private function render(string $suffix): string
+    {
+        $result = \PHP_INT_SIZE === 8 ? 'long double' : 'double';
+
+        return $result . $suffix;
+    }
+
     /**
      * @param \ReflectionType $type
      * @param \ReflectionParameter $param
@@ -20,9 +31,9 @@ final class StringTypeRenderer extends NamedTypeRenderer implements ArgumentRend
      */
     public function renderArgument(\ReflectionType $type, \ReflectionParameter $param): string
     {
-        $prefix = $param->isPassedByReference() ? '' : 'const ';
+        $suffix = $type->allowsNull() || $param->isPassedByReference() ? '*' : '';
 
-        return $prefix . 'char*';
+        return $this->render($suffix);
     }
 
     /**
@@ -32,7 +43,7 @@ final class StringTypeRenderer extends NamedTypeRenderer implements ArgumentRend
      */
     public function renderReturnType(\ReflectionType $type, \ReflectionFunctionAbstract $fn): string
     {
-        return 'char*';
+        return $this->render($type->allowsNull() ? '*' : '');
     }
 
     /**
@@ -41,6 +52,6 @@ final class StringTypeRenderer extends NamedTypeRenderer implements ArgumentRend
      */
     protected function is(\ReflectionNamedType $type): bool
     {
-        return $type->getName() === 'string';
+        return $type->getName() === 'float';
     }
 }
